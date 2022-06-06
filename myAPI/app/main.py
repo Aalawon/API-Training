@@ -7,12 +7,15 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 
+#uvicorn app.main:app --reload
+
 app = FastAPI()
 
 class Post(BaseModel):
     title: str
     content: str
     published: bool = True
+
 
 while True:
     try:
@@ -77,17 +80,20 @@ def delete_post(id: int):
     if deleted_post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found")
 
-
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.put("/posts/{id}")
 def update_post(id: int, post: Post):
-    index = find_index_post(id)
 
-    if index is None:
+    cursor.execute("""UPDATE posts SET title = %s, content = %s, published = %s 
+                    WHERE id = %s RETURNING *""",
+                   (post.title, post.content, post.published, str(id)))
+
+    updated_post = cursor.fetchone()
+
+    if updated_post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found")
 
-    post_dict = post.dict()
-    post_dict["id"] = id
-    my_posts[index] = post_dict
-    return {"data": post_dict}
+    conn.commit()
+
+    return {"data": updated_post}
